@@ -1,6 +1,6 @@
 ---
 title: "Final_project"
-author: "Siya Qiu & Shuhan Song"
+author: "Siya Qiu (PSTAT 231) & Shuhan Song (5609417, PSTAT 231)"
 date: "12/3/2019"
 output: html_document
 ---
@@ -28,11 +28,18 @@ library(gbm)
 
 
 
-##### **1. What makes voter behavior prediction (and thus election forecasting) a hard problem?**
 
-##### **2. What was unique to Nate Silver’s approach in 2012 that allowed him to achieve good predictions?**
+##### 1. What makes voter behavior prediction (and thus election forecasting) a hard problem?
 
-##### **3. What went wrong in 2016? What do you think should be done to make future predictions better?**
+There are many factors that make voter behavior hard to predict. People can be easily influenced by unpredictable various events, like debates and superstorms, that will change their decision made during the polls. Even though polls are taken from individuals, supporters for one candidate have greater tendency to get invloved in polling especially under the influence from social media. Also, people feel shamed about voting for one candidate might lie during polling but actually vote for the ideal candidate during voting. Pollsters want the result to be random and will factor in their own corrections. But the corrections they made also vary. 
+
+##### 2. What was unique to Nate Silver’s approach in 2012 that allowed him to achieve good predictions?
+
+Nate correctly predicted each state's voting result in 2012 and added up to a correct nationwide prediction. The systematic errors in the prediction model accurately cancelled out each other. This allowed him to achieve good predictions.
+
+##### 3. What went wrong in 2016? What do you think should be done to make future predictions better?
+
+The systematic errors of multiple polls went wrong in the same direction in 2016 so that added up to a wrong prediction in 2016. Individual polls were wrong, aggregated to wrong state polls, and further led to a wrong forcast of the national election result. I think it is important for pollsters to take polls close to random sample and avoid making assumptions to factor in to their own corrections. Besides, I think actions to reduce lying or undecision during the pollings could make future predictions better. 
 
 ```{r, warning = FALSE, message = FALSE}
 election.raw <- read_delim("data/election/election.csv", delim = ",") %>% 
@@ -43,7 +50,7 @@ census_meta <- read_delim("data/census/metadata.csv", delim = ";", col_names = F
 census <- read_delim("data/census/census.csv", delim = ",")
 ```
 
-##### 4. Report the dimention of election.raw after removing rows with fips = 2000. Provide a reason for excluding them. Please make sure to use the same name election.raw before and after removing those observations. 
+##### 4. Report the dimension of election.raw after removing rows with fips = 2000. Provide a reason for excluding them. Please make sure to use the same name election.raw before and after removing those observations. 
 ```{r}
 kable(election.raw %>% filter(fips == 2000)) %>% 
   kable_styling(bootstrap_options = "striped")
@@ -81,8 +88,6 @@ candidate_table <- election %>%
   group_by(candidate) %>% 
   summarize_all(funs(sum)) %>% 
   mutate(log_total = log(votes))
-
-num_of_candidate <- length(nrow(candidate_table))
 ```
 
 - There are `r nrow(candidate_table)` categories of candidates in the 2016 election, in which `r (nrow(candidate_table)-1)` are refering to specific person and 1 category is for "None of these candidates".
@@ -117,7 +122,7 @@ state_winner <- election_state %>%
 ```{r}
 countries <- map_data("county")
 ggplot(data = countries)+
-  geom_polygon(aes(x = long, y = lat, fill = subregion, group = group), color = "white")+
+  geom_polygon(aes(x = long, y = lat, fill = subregion, group = group), color = "white", size = 0.1)+
   coord_fixed(1.3)+
   guides(fill = F)
 ```
@@ -130,14 +135,22 @@ ggplot(data = countries)+
 states <- map_data("state")
 fips = state.abb[match(states$region, tolower(state.name))]
 states$state <- fips
-states <- left_join(states, state_winner, by = "state")
+states <- left_join(states, state_winner, by = "state") %>% 
+  filter(candidate != is.na(candidate))
+
+summary(states)
 ```
 
 ```{r}
 ggplot(data = states)+
-  geom_polygon(aes(x = long, y = lat, fill = candidate, group = group), color = "white")+
-  coord_fixed(1.3)+
-  guides(fill = F)
+  geom_polygon(aes(x = long, y = lat, fill = candidate, group = group), 
+               color = "white",
+               size = 0.3) +
+  coord_fixed(1.3) +
+  labs(x = "Longitude",
+       y = "Latitude",
+       fill = "Winner by state")
+  
 ```
 
 ##### 10. The variable county does not have fips column. So we will create one by pooling information from maps::county.fips. Split the polyname column to region and subregion. Use left_join() combine county.fips into county. Also, left_join() previously created variable county_winner
@@ -148,15 +161,22 @@ fips <- county.fips %>%
 county <- left_join(countries, fips, by = c("region","subregion")) %>% 
   mutate(fips = as.character(fips))
 
-county <- left_join(county, county_winner, by = "fips")
+county <- left_join(county, county_winner, by = "fips") %>% 
+  filter(candidate != is.na(candidate))
 ```
 
 ```{r}
-county_map <- ggplot(data = county)+
-  geom_polygon(aes(x = long, y = lat, fill = candidate, group = group), color = "white")+
-  coord_fixed(1.3)+
-  guides(fill = F)
-county_map
+ggplot(data = county)+
+  geom_polygon(aes(x = long, 
+                   y = lat, 
+                   fill = candidate, 
+                   group = group), 
+               color = "white", 
+               size = 0.1)+
+  coord_fixed(1.3) +
+  labs(x = "Longitude",
+       y = "Latitude",
+       fill = "Winner by county")
 ```
 
 ##### 11. Create a visualization of your choice using census data. 
@@ -184,21 +204,33 @@ states <- left_join(states, census_poverty, by = "state")
 state_loc <- data.frame("State" = state.name,
                         "long" = state.center$x,
                         "lat" = state.center$y)
-state_loc <- left_join(state_loc, census_poverty, by = "State")
-```
 
+state_loc <- left_join(state_loc, census_poverty, by = "State") %>% 
+  filter(state != "AK") %>% 
+  filter(state != "HI")
+```
 
 ```{r}
 # poverty vs. election result 
-poverty_map <- ggplot()+
-  geom_polygon(data = states, aes(x = long, y = lat, fill = candidate, group = group), color = "white")+
-  geom_point(data = state_loc, aes(x = long, y = lat, size = pct_poverty, color = pct_poverty), alpha = 0.9)+
+ggplot() +
+  geom_polygon(data = states, 
+               aes(x = long, 
+                   y = lat, 
+                   fill = candidate, 
+                   group = group), 
+               color = "white", 
+               size = 0.3) +
+  geom_point(data = state_loc, 
+             aes(x = long, y = lat, color = pct_poverty), 
+             size = 5,
+             alpha = 0.8)+
   scale_size_continuous(range = c(0.1,6))+
   scale_color_viridis_c(option = "viridis", begin = 1, end = 0)+
-  coord_fixed(1.3)+
-  guides(fill = F)
-
-poverty_map
+  coord_fixed(1.3) +
+  labs(x = "Longitude",
+       y = "Latitude",
+       fill = "Winner by state",
+       color = "Percentage of poverty")
 ```
 
 ##### 12. The census data contains high resolution information (more fine-grained than county-level). In this problem, we aggregate the information into county-level data by computing TotalPop-weighted average of each attributes for each county.
@@ -247,7 +279,7 @@ example
 apply(census.del, 2, var)
 ```
 
-- We checked the variables in the dataframe that their variances are vastly different from each other. If we do not center and scale the variables before performing PCA, then most of the PC that we observed would be driven by variables that have the largest variances. Thus, it is important to standardize the variables to have mean zero and sd of 1 beforming PCA [1].<br><br>[1] James et. al. - An Introduction to Statistical Learning with Applications in R, Eigth Edition. Available at: http://www-bcf.usc.edu/~gareth/ISL/
+- We checked the variables in the dataframe that their variances are vastly different from each other. If we do not center and scale the variables before performing PCA, then most of the PC that we observed would be driven by variables that have the largest variances. Thus, it is important to standardize the variables to have mean zero and sd of 1 beforming PCA [1].
 
 ```{r}
 # pca for subcounty, select the first 2 PC
@@ -357,12 +389,13 @@ ct_num_90 <- length(ct_cumsum_list)+1
 - As shown in the second plot, the Cumulative Proportion of Variance Explained, we need at least `r subct_num_90` PCs to capture 90% of the variance in the sub-county level analyses.
 
 ```{r}
-plot(subct_pve, xlab="Principal Component for sub-county level", ylab="Proportion of Variance Explained", ylim = c(0,1), type = "b")
-```
+par(mfrow = c(1, 2))
 
-```{r}
+plot(subct_pve, xlab="Principal Component for sub-county level", ylab="Proportion of Variance Explained", ylim = c(0,1), type = "b")
+
 plot(cumsum(subct_pve), xlab="Principal Component for sub-county level", ylab="Cumulative Proportion of Variance Explained", ylim = c(0,1), type = "b")
 abline(h = 0.9, col = "red")
+abline(v = subct_num_90, lty = 3)
 ```
 
 - See the following two plots for PVE and cumulative PVE for county-level data
@@ -370,12 +403,13 @@ abline(h = 0.9, col = "red")
 - As shown in the second plot, the Cumulative Proportion of Variance Explained, we need at least `r ct_num_90` PCs to capture 90% of the variance in the county-level analyses.
 
 ```{r}
-plot(ct_pve, xlab="Principal Component for county level", ylab="Proportion of Variance Explained", ylim = c(0,1), type = "b")
-```
+par(mfrow = c(1, 2))
 
-```{r}
+plot(ct_pve, xlab="Principal Component for county level", ylab="Proportion of Variance Explained", ylim = c(0,1), type = "b")
+
 plot(cumsum(ct_pve), xlab="Principal Component for county level", ylab="Cumulative Proportion of Variance Explained", ylim = c(0,1), type = "b")
 abline(h = 0.9, col = "red")
+abline(v = ct_num_90, lty = 3)
 ```
 
 
@@ -410,7 +444,7 @@ ct_5_cluster_10 <- cutree(ct_pc_5_hclust, 10)
 - The two trees does not agree with each other. The 5 PC tree dissipate observations in the first cluster of the original tree to clusters 1 to 7.  
 
 - See the following table for the contract result. Each column represents for the number of observation assigned to each cluster in the 5 PC tree. Each row represents for the number of observation assigned to each cluster in the original tree. 
-```{r, warning = FALSE, message = FALSE,results = "hold"}
+```{r, warning = FALSE, message = FALSE, results = "hold"}
 # compare resulte
 contract_table <- table(org_cluster = ct_cluster_10, pc5_cluster = ct_5_cluster_10)
 kable(contract_table, row.names = c(1,2,3,4,5,6,7,8,9,10)) %>% 
@@ -504,7 +538,7 @@ colnames(records) = c("train.error","test.error")
 rownames(records) = c("tree","logistic","lasso")
 ```
 
-###### 16. Decision tree: train a decision tree by cv.tree(). Prune tree to minimize misclassification error. Be sure to use the folds from above for cross-validation. Visualize the trees before and after pruning. Save training and test errors to records variable. Intepret and discuss the results of the decision tree analysis.
+##### 16. Decision tree: train a decision tree by cv.tree(). Prune tree to minimize misclassification error. Be sure to use the folds from above for cross-validation. Visualize the trees before and after pruning. Save training and test errors to records variable. Intepret and discuss the results of the decision tree analysis.
 ```{r}
 # fit model on training set
 set.seed(666)
@@ -512,12 +546,14 @@ elec_tree <- tree(candidate~., data = trn.cl)
 ```
 
 - Tree before pruning 
+
 ```{r}
 draw.tree(elec_tree, nodeinfo = TRUE, cex = 0.3)
 title("Classification Tree Built on Training Set (Before Pruning)")
 ```
 
 - Tree after pruning
+
 ```{r}
 # use cv.tree to prune the tree
 set.seed(666)
@@ -548,6 +584,7 @@ records[1,2] <- elec_test_err
 ```
 
 - The training error of decision tree is `r records[1,1]`, while the testing error is `r records[1,2]`. The training error and testing error are close to each other, and both errors are relatively small. This means that our training model does not overfit the training data and will correctly predict the election results at a rate of `r (1-records[1,2])*100`%.
+
 ```{r, results = "hold"}
 kable(records) %>% 
   kable_styling(bootstrap_options = "striped")
@@ -595,18 +632,24 @@ kable(records) %>%
 ```
 
 ```{r}
-coe_var <- unlist(glm.fit)
-name_var <- names(trn.cl)
+summary_glm_fit <- summary(glm.fit)
+coe_var <- summary_glm_fit$coefficients[,4]
+name_var <- names(coe_var)
 sig_var <- NULL
-for(i in 2:28){
+for(i in 1:28){
   if(coe_var[i]<0.05){
-    sig_var <- append(sig_var, name_var[i-1])
+    sig_var <- append(sig_var, name_var[i])
   }
 }
+sig_var <- sig_var[-1]
+
+est_employed <- summary_glm_fit$coefficients[23,1]
+est_unemployed <- summary_glm_fit$coefficients[27,1]
+est_citizen <- summary_glm_fit$coefficients[6,1]
 ```
 
-- Variables that are significant are: `r sig_var`. It is not consistent with what we have in decision tree. 
-- Interpretation of some of the coefficients of the variables. <br>
+- Variables that are significant are: `r sig_var` (*p* < 0.05). It is not quite consistent with what we have in decision tree but has overlapped ones. 
+- Interpretation: For example, for variable of *Employed*, when other vairables are hold constant, a unit increase of employed will increase the score of voting for Clinton by `r round(est_employed, 2)`. For variable *Unemployed*, a unit increase of employed will increase the score of voting for Clinton by only `r round(est_unemployed, 2)`. Also, for a unit increase of variable *Citizen*, it will increase the score of voting for Clinton by only `r round(est_citizen, 2)`. 
     
 ##### 18. You may notice that you get a warning glm.fit: fitted probabilities numerically 0 or 1 occurred. As we discussed in class, this is an indication that we have perfect separation (some linear combination of variables perfectly predicts the winner). This is usually a sign that we are overfitting. One way to control overfitting in logistic regression is through regulation. Use the cv.glmnet function from the glmnet library to run K-fold cross validation and select the best regularization parameter for the logistic regression with LASSO penalty. Reminder: set alpha=1 to run LASSO regression, set lambda = c(1, 5, 10, 50) * 1e-4 in cv.glmnet() function to set pre-defined candidate values for the tuning parameter λ. This is because the default candidate values of λ in cv.glmnet() is relatively too large for our dataset thus we use pre-defined candidate values. What is the optimal value of λ in cross validation? What are the non-zero coefficients in the LASSO regression for the optimal value of λ? How do they compare to the unpenalized logistic regression? Save training and test errors to the records variable.
 ```{r}
@@ -626,14 +669,14 @@ coe <-  predict(regu_glm, s = optlambda, type ="coefficient")[1:27,]
 coe_names <- names(coe)
 nzcoe <-  NULL
 for(i in 2:27){
-  if(coe[i]>0){
+  if(coe[i]!=0){
     nzcoe <- append(nzcoe, coe_names[i])
   }
 }
 ```
 
 - The optimal value of lanbda in cross validation is `r ans_opt`.
-- The non-zero coefficients in the LASSO regression for the optimal value of lambda are `r nzcoe`.
+- The non-zero coefficients in the LASSO regression for the optimal value of lambda are `r nzcoe`. 
 
 ```{r}
 # make predictions 
@@ -642,9 +685,9 @@ regu_pred_train = factor(ifelse(regu_pred_train>0.5, "Hillary Clinton", "Donald 
 regu_pred_test = predict(regu_glm, s=optlambda, newx = x.test, type = "response")
 regu_pred_test = factor(ifelse(regu_pred_test>0.5, "Hillary Clinton", "Donald Trump"))
 regu_train_err = calc_error_rate(regu_pred_train, Ytrain.cl)
-regu_train_err = calc_error_rate(regu_pred_test, Ytest.cl)
+regu_test_err = calc_error_rate(regu_pred_test, Ytest.cl)
 records[3,1] = regu_train_err
-records[3,2] = regu_train_err
+records[3,2] = regu_test_err
 ```
 
 - Traning error and testing error of the LASSO regression 
@@ -652,6 +695,8 @@ records[3,2] = regu_train_err
 kable(records) %>% 
   kable_styling(bootstrap_options = "striped")
 ```
+
+- Comparing the test error and train error of logistic regression and lasso regression, there is not much difference in their performance. 
 
 ##### 19. Compute ROC curves for the decision tree, logistic regression and LASSO logistic regression using predictions on the test data. 
 ```{r}
@@ -676,6 +721,8 @@ legend(x = "bottomright",
        legend = c("Decision Tree", "Logistic Regression", "LASSO Regression"),
        fill = 1:m)
 ```
+
+- According to the ROC curve, regression models did better classification than Decision tree. Soft classifiers (logistic and LASSO) outperformed binary classifer. 
 
 ```{r}
 #________________________________________________________
@@ -702,7 +749,6 @@ rf.err
 ```{r}
 #test error
 rf_test_err = 1-sum(diag(rf.err))/sum(rf.err)
-rf_test_err
 ```
 ```{r}
 # view the importance of each variable
@@ -735,9 +781,9 @@ pred_boost = factor(ifelse(pred_boost>0.5, "Hillary Clinton", "Donald Trump"))
 
 boost.err <- table(pred = pred_boost, truth = tst.cl$candidate)
 test.boost.err <- 1-sum(diag(boost.err))/sum(boost.err)
-test.boost.err
 ```
 - According to our analysis of random forest, the `r rf_imp_var_mean` is by far the most important variable in terms of Model Accuracy and Gini index. However, according to boosting, the most important variable is "White" and then followed by "Transit"
 - The testing error for randon forest is `r rf.err`, and the testing error for boosting is `r test.boost.err`, which random forest has a lower testing error 
 
-
+##### Reference
+[1] James et. al. - An Introduction to Statistical Learning with Applications in R, Eigth Edition. Available at: http://www-bcf.usc.edu/~gareth/ISL/
